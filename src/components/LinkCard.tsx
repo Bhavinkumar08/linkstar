@@ -15,10 +15,16 @@ interface LinkCardProps {
   createdAt: Date;
   isOwner?: boolean;
   onDelete: (id: string) => void;
-  onEdit: (id: string) => void;
+  onEdit: (id: string, updates: {
+    name: string;
+    url: string;
+    description: string;
+    tags: string[];
+    isPublic: boolean;
+  }) => void;
   onToggleStar: (id: string) => void;
   onToggleVisibility: (id: string) => void;
-  EditDialog?: React.ComponentType<any>;
+  EditDialog?: React.ComponentType<{ link: { id: string; name: string; url: string; description: string; tags: string[]; isPublic: boolean; }; onEdit: (id: string, updates: { name: string; url: string; description: string; tags: string[]; isPublic: boolean; }) => void; }>;
 }
 
 export function LinkCard({

@@ -18,6 +18,7 @@ interface LinkCardProps {
   onEdit: (id: string) => void;
   onToggleStar: (id: string) => void;
   onToggleVisibility: (id: string) => void;
+  EditDialog?: React.ComponentType<any>;
 }
 
 export function LinkCard({
@@ -33,6 +34,7 @@ export function LinkCard({
   onEdit,
   onToggleStar,
   onToggleVisibility,
+  EditDialog,
 }: LinkCardProps) {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -107,13 +109,19 @@ export function LinkCard({
           >
             {isOwner && (
               <>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onEdit(id)}
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
+                {EditDialog && (
+                  <EditDialog
+                    link={{
+                      id,
+                      name,
+                      url,
+                      description,
+                      tags,
+                      isPublic,
+                    }}
+                    onEdit={onEdit}
+                  />
+                )}
                 <Button
                   variant="ghost"
                   size="icon"

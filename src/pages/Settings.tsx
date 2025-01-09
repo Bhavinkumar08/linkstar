@@ -11,12 +11,14 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, AlertDialogCancel } from "@/components/ui/alert-dialog";
 
 interface UserSettings {
   default_visibility: boolean;
   auto_fetch_metadata: boolean;
   default_tags: string[];
+  username?: string;
 }
 
 export default function Settings() {
@@ -27,10 +29,13 @@ export default function Settings() {
   const [autoFetchMetadata, setAutoFetchMetadata] = useState(true);
   const [defaultTags, setDefaultTags] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [username, setUsername] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchUserSettings();
+      setUsername(user.user_metadata?.username || "");
     }
   }, [user]);
 
@@ -57,28 +62,32 @@ export default function Settings() {
     }
   };
 
-  const saveSettings = async () => {
+  const saveAllSettings = async () => {
     if (!user) return;
-
     setIsSaving(true);
     try {
-      const settings: UserSettings = {
-        default_visibility: defaultVisibility,
-        auto_fetch_metadata: autoFetchMetadata,
-        default_tags: defaultTags.split(',').map(tag => tag.trim()).filter(Boolean)
-      };
-
-      const { error } = await supabase
+      // Update username and settings in a single transaction
+      const { error: settingsError } = await supabase
         .from('user_settings')
         .upsert({
           user_id: user.id,
-          ...settings,
+          username,
+          default_visibility: defaultVisibility,
+          auto_fetch_metadata: autoFetchMetadata,
+          default_tags: defaultTags.split(',').map(tag => tag.trim()).filter(Boolean),
           updated_at: new Date().toISOString()
         });
 
-      if (error) throw error;
+      if (settingsError) throw settingsError;
 
-      toast.success("Settings saved successfully");
+      // Update user metadata
+      const { error: userError } = await supabase.auth.updateUser({
+        data: { username }
+      });
+
+      if (userError) throw userError;
+
+      toast.success("All settings saved successfully");
     } catch (error) {
       console.error('Error saving settings:', error);
       toast.error("Failed to save settings");
@@ -98,13 +107,43 @@ export default function Settings() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    
+    setIsDeleting(true);
+    try {
+      // Delete the user using Supabase admin API
+      const { error: deleteError } = await supabase.rpc('delete_user');
+      
+      if (deleteError) throw deleteError;
+
+      await signOut();
+      toast.success("Account deleted successfully");
+      navigate("/login");
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      toast.error("Failed to delete account");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <main className="flex-1 p-6">
           <div className="max-w-2xl mx-auto space-y-6">
-            <h1 className="text-3xl font-bold mb-8">Settings</h1>
+            <div className="flex justify-between items-center">
+              <h1 className="text-3xl font-bold">Settings</h1>
+              <Button
+                size="lg"
+                onClick={saveAllSettings}
+                disabled={isSaving}
+              >
+                {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
             
             <Card>
               <CardHeader>
@@ -112,17 +151,50 @@ export default function Settings() {
                 <CardDescription>Manage your account settings</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">{user?.email}</p>
-                    <p className="text-sm text-muted-foreground">Google Account</p>
-                  </div>
-                  <Button variant="outline" onClick={handleSignOut}>
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Sign Out
-                  </Button>
+                <div>
+                  <Label>Email</Label>
+                  <p className="text-sm text-muted-foreground">{user?.email}</p>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Username</Label>
+                  <Input
+                    placeholder="Enter username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                  />
                 </div>
               </CardContent>
+              <CardFooter className="flex justify-between">
+                <Button variant="outline" onClick={handleSignOut}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive">Delete Account</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete your
+                        account and remove all your data from our servers.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <Button
+                        variant="destructive"
+                        onClick={handleDeleteAccount}
+                        disabled={isDeleting}
+                      >
+                        {isDeleting ? "Deleting..." : "Delete Account"}
+                      </Button>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </CardFooter>
             </Card>
 
             <Card>
@@ -168,10 +240,6 @@ export default function Settings() {
                     These tags will be automatically added to new links
                   </p>
                 </div>
-
-                <Button onClick={saveSettings} disabled={isSaving}>
-                  {isSaving ? "Saving..." : "Save Preferences"}
-                </Button>
               </CardContent>
             </Card>
 

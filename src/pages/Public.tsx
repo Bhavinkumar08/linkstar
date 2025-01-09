@@ -14,9 +14,9 @@ interface Link {
   url: string;
   description: string;
   tags: string[];
-  isPublic: boolean;
-  isStarred: boolean;
-  createdAt: Date;
+  is_public: boolean;
+  is_starred: boolean;
+  created_at: string;
   user_id: string;
   user_settings: {
     username: string | null;
@@ -32,14 +32,12 @@ export default function Public() {
   const fetchPublicLinks = useCallback(async () => {
     const { data: linksData, error: linksError } = await supabase
       .from('links')
-      .select(`
-        *,
-        user_settings:user_id (username)
-      `)
+      .select('*')
       .eq('is_public', true)
       .order('created_at', { ascending: false });
 
     if (linksError) {
+      console.error('Error fetching public links:', linksError);
       toast({
         title: "Error",
         description: "Failed to fetch public links",
@@ -48,34 +46,14 @@ export default function Public() {
       return;
     }
 
-    const transformedLinks = linksData.map(link => ({
-      ...link,
-      isPublic: link.is_public,
-      isStarred: link.is_starred,
-      createdAt: new Date(link.created_at),
-    }));
-
-    setLinks(transformedLinks);
-  }, [toast, user]);
+    setLinks(linksData || []);
+  }, [toast]);
 
   useEffect(() => {
-    if (user) {
-      fetchPublicLinks();
-    }
-  }, [user, fetchPublicLinks]);
+    fetchPublicLinks();
+  }, [fetchPublicLinks]);
 
   const handleDeleteLink = async (id: string) => {
-    // Only allow deletion if the user owns the link
-    const link = links.find(l => l.id === id);
-    if (link?.user_id !== user.id) {
-      toast({
-        title: "Error",
-        description: "You can only delete your own links",
-        variant: "destructive",
-      });
-      return;
-    }
-
     const { error } = await supabase
       .from('links')
       .delete()
@@ -97,20 +75,11 @@ export default function Public() {
   };
 
   const handleToggleStar = async (id: string) => {
-    // Only allow starring if the user owns the link
     const link = links.find(l => l.id === id);
-    if (link?.user_id !== user.id) {
-      toast({
-        title: "Error",
-        description: "You can only star your own links",
-        variant: "destructive",
-      });
-      return;
-    }
 
     const { error } = await supabase
       .from('links')
-      .update({ is_starred: !link.isStarred })
+      .update({ is_starred: !link.is_starred })
       .eq('id', id);
 
     if (error) {
@@ -125,20 +94,11 @@ export default function Public() {
   };
 
   const handleToggleVisibility = async (id: string) => {
-    // Only allow visibility toggle if the user owns the link
     const link = links.find(l => l.id === id);
-    if (link?.user_id !== user.id) {
-      toast({
-        title: "Error",
-        description: "You can only modify your own links",
-        variant: "destructive",
-      });
-      return;
-    }
 
     const { error } = await supabase
       .from('links')
-      .update({ is_public: !link.isPublic })
+      .update({ is_public: !link.is_public })
       .eq('id', id);
 
     if (error) {
@@ -159,12 +119,12 @@ export default function Public() {
       link.description.toLowerCase().includes(searchLower) ||
       link.url.toLowerCase().includes(searchLower) ||
       link.tags.some((tag) => tag.toLowerCase().includes(searchLower)) ||
-      (link.user_settings?.username || 'Anonymous').toLowerCase().includes(searchLower)
+      'Anonymous'.toLowerCase().includes(searchLower)
     );
   });
 
   return (
-    <SidebarProvider defaultOpen={false}>
+    <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <main className="flex-1 p-6">
@@ -187,7 +147,10 @@ export default function Public() {
                 <LinkCard
                   key={link.id}
                   {...link}
-                  name={`${link.name} (by ${link.user_settings?.username || 'Anonymous'})`}
+                  name={`${link.name} (by Anonymous)`}
+                  isPublic={link.is_public}
+                  isStarred={link.is_starred}
+                  createdAt={new Date(link.created_at)}
                   onDelete={handleDeleteLink}
                   onEdit={() => {}}
                   onToggleStar={handleToggleStar}

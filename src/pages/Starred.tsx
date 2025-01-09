@@ -6,8 +6,19 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 
+interface Link {
+  id: string;
+  name: string;
+  url: string;
+  description: string;
+  tags: string[];
+  is_public: boolean;
+  is_starred: boolean;
+  created_at: string;
+}
+
 export default function Starred() {
-  const [links, setLinks] = useState([]);
+  const [links, setLinks] = useState<Link[]>([]);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -98,7 +109,7 @@ export default function Starred() {
   };
 
   return (
-    <SidebarProvider defaultOpen={false}>
+    <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <main className="flex-1 p-6">
@@ -109,6 +120,9 @@ export default function Starred() {
                 <LinkCard
                   key={link.id}
                   {...link}
+                  isPublic={link.is_public}
+                  isStarred={link.is_starred}
+                  createdAt={new Date(link.created_at)}
                   onDelete={handleDeleteLink}
                   onEdit={() => {}}
                   onToggleStar={handleToggleStar}

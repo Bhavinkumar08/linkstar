@@ -16,6 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { EditLinkDialog } from "@/components/EditLinkDialog";
 
 interface Link {
   id: string;
@@ -139,11 +140,38 @@ export default function Index() {
     }
   };
 
-  const handleEditLink = (id: string) => {
-    toast({
-      title: "Edit functionality",
-      description: "Edit functionality will be implemented in the next version.",
-    });
+  const handleEditLink = async (id: string, updates: {
+    name: string;
+    url: string;
+    description: string;
+    tags: string[];
+    isPublic: boolean;
+  }) => {
+    const { error } = await supabase
+      .from('links')
+      .update({
+        name: updates.name,
+        url: updates.url,
+        description: updates.description,
+        tags: updates.tags,
+        is_public: updates.isPublic,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update link",
+        variant: "destructive",
+      });
+    } else {
+      await fetchLinks();
+      toast({
+        title: "Success",
+        description: "Link updated successfully",
+      });
+    }
   };
 
   const handleToggleStar = async (id: string) => {
@@ -293,6 +321,7 @@ export default function Index() {
                   onEdit={handleEditLink}
                   onToggleStar={handleToggleStar}
                   onToggleVisibility={handleToggleVisibility}
+                  EditDialog={EditLinkDialog}
                 />
               ))}
               {filteredLinks.length === 0 && (

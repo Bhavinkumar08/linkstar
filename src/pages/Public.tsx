@@ -1,41 +1,81 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { LinkCard } from "@/components/LinkCard";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
+
+interface Link {
+  id: string;
+  name: string;
+  url: string;
+  description: string;
+  tags: string[];
+  isPublic: boolean;
+  isStarred: boolean;
+  createdAt: Date;
+  user_id: string;
+  user_settings: {
+    username: string | null;
+  } | null;
+}
 
 export default function Public() {
-  const [links, setLinks] = useState([]);
+  const [links, setLinks] = useState<Link[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
   const { user } = useAuth();
 
-  useEffect(() => {
-    if (user) {
-      fetchPublicLinks();
-    }
-  }, [user]);
-
-  const fetchPublicLinks = async () => {
-    const { data, error } = await supabase
+  const fetchPublicLinks = useCallback(async () => {
+    const { data: linksData, error: linksError } = await supabase
       .from('links')
-      .select('*')
+      .select(`
+        *,
+        user_settings:user_id (username)
+      `)
       .eq('is_public', true)
       .order('created_at', { ascending: false });
 
-    if (error) {
+    if (linksError) {
       toast({
         title: "Error",
         description: "Failed to fetch public links",
         variant: "destructive",
       });
-    } else {
-      setLinks(data);
+      return;
     }
-  };
+
+    const transformedLinks = linksData.map(link => ({
+      ...link,
+      isPublic: link.is_public,
+      isStarred: link.is_starred,
+      createdAt: new Date(link.created_at),
+    }));
+
+    setLinks(transformedLinks);
+  }, [toast, user]);
+
+  useEffect(() => {
+    if (user) {
+      fetchPublicLinks();
+    }
+  }, [user, fetchPublicLinks]);
 
   const handleDeleteLink = async (id: string) => {
+    // Only allow deletion if the user owns the link
+    const link = links.find(l => l.id === id);
+    if (link?.user_id !== user.id) {
+      toast({
+        title: "Error",
+        description: "You can only delete your own links",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const { error } = await supabase
       .from('links')
       .delete()
@@ -57,10 +97,20 @@ export default function Public() {
   };
 
   const handleToggleStar = async (id: string) => {
-    const link = links.find((l) => l.id === id);
+    // Only allow starring if the user owns the link
+    const link = links.find(l => l.id === id);
+    if (link?.user_id !== user.id) {
+      toast({
+        title: "Error",
+        description: "You can only star your own links",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const { error } = await supabase
       .from('links')
-      .update({ is_starred: !link.is_starred })
+      .update({ is_starred: !link.isStarred })
       .eq('id', id);
 
     if (error) {
@@ -75,10 +125,20 @@ export default function Public() {
   };
 
   const handleToggleVisibility = async (id: string) => {
-    const link = links.find((l) => l.id === id);
+    // Only allow visibility toggle if the user owns the link
+    const link = links.find(l => l.id === id);
+    if (link?.user_id !== user.id) {
+      toast({
+        title: "Error",
+        description: "You can only modify your own links",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const { error } = await supabase
       .from('links')
-      .update({ is_public: !link.is_public })
+      .update({ is_public: !link.isPublic })
       .eq('id', id);
 
     if (error) {
@@ -92,27 +152,54 @@ export default function Public() {
     }
   };
 
+  const filteredLinks = links.filter((link) => {
+    const searchLower = searchQuery.toLowerCase();
+    return (
+      link.name.toLowerCase().includes(searchLower) ||
+      link.description.toLowerCase().includes(searchLower) ||
+      link.url.toLowerCase().includes(searchLower) ||
+      link.tags.some((tag) => tag.toLowerCase().includes(searchLower)) ||
+      (link.user_settings?.username || 'Anonymous').toLowerCase().includes(searchLower)
+    );
+  });
+
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <main className="flex-1 p-6">
           <div className="max-w-7xl mx-auto">
-            <h1 className="text-3xl font-bold mb-6">Public Links</h1>
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+              <h1 className="text-3xl font-bold">Public Links</h1>
+              <div className="relative w-full md:w-[300px]">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search public links..."
+                  className="pl-9"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {links.map((link) => (
+              {filteredLinks.map((link) => (
                 <LinkCard
                   key={link.id}
                   {...link}
+                  name={`${link.name} (by ${link.user_settings?.username || 'Anonymous'})`}
                   onDelete={handleDeleteLink}
                   onEdit={() => {}}
                   onToggleStar={handleToggleStar}
                   onToggleVisibility={handleToggleVisibility}
+                  isOwner={link.user_id === user.id}
                 />
               ))}
-              {links.length === 0 && (
+              {filteredLinks.length === 0 && (
                 <div className="col-span-full text-center py-12 text-muted-foreground">
-                  No public links available.
+                  {searchQuery
+                    ? "No public links found matching your search."
+                    : "No public links available."}
                 </div>
               )}
             </div>

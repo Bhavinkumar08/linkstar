@@ -12,6 +12,7 @@ interface LinkCardProps {
   tags: string[];
   isPublic: boolean;
   isStarred: boolean;
+  createdAt: Date;
   onDelete: (id: string) => void;
   onEdit: (id: string) => void;
   onToggleStar: (id: string) => void;

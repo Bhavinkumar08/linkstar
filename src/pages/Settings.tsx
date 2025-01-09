@@ -13,6 +13,12 @@ import { supabase } from "@/lib/supabase";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+interface UserSettings {
+  default_visibility: boolean;
+  auto_fetch_metadata: boolean;
+  default_tags: string[];
+}
+
 export default function Settings() {
   const { user, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
@@ -20,6 +26,7 @@ export default function Settings() {
   const [defaultVisibility, setDefaultVisibility] = useState(false);
   const [autoFetchMetadata, setAutoFetchMetadata] = useState(true);
   const [defaultTags, setDefaultTags] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -28,33 +35,55 @@ export default function Settings() {
   }, [user]);
 
   const fetchUserSettings = async () => {
-    const { data, error } = await supabase
-      .from('user_settings')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
 
-    if (!error && data) {
-      setDefaultVisibility(data.default_visibility);
-      setAutoFetchMetadata(data.auto_fetch_metadata);
-      setDefaultTags(data.default_tags?.join(', ') || '');
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned" error
+        throw error;
+      }
+
+      if (data) {
+        setDefaultVisibility(data.default_visibility);
+        setAutoFetchMetadata(data.auto_fetch_metadata);
+        setDefaultTags(data.default_tags?.join(', ') || '');
+      }
+    } catch (error) {
+      toast.error("Failed to load settings");
+      console.error('Error fetching settings:', error);
     }
   };
 
   const saveSettings = async () => {
-    const { error } = await supabase
-      .from('user_settings')
-      .upsert({
-        user_id: user.id,
+    if (!user) return;
+
+    setIsSaving(true);
+    try {
+      const settings: UserSettings = {
         default_visibility: defaultVisibility,
         auto_fetch_metadata: autoFetchMetadata,
         default_tags: defaultTags.split(',').map(tag => tag.trim()).filter(Boolean)
-      });
+      };
 
-    if (error) {
-      toast.error("Failed to save settings");
-    } else {
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert({
+          user_id: user.id,
+          ...settings,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+
       toast.success("Settings saved successfully");
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast.error("Failed to save settings");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -64,6 +93,7 @@ export default function Settings() {
       toast.success("Signed out successfully");
       navigate("/login");
     } catch (error) {
+      console.error('Error signing out:', error);
       toast.error("Failed to sign out");
     }
   };
@@ -139,7 +169,9 @@ export default function Settings() {
                   </p>
                 </div>
 
-                <Button onClick={saveSettings}>Save Preferences</Button>
+                <Button onClick={saveSettings} disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Save Preferences"}
+                </Button>
               </CardContent>
             </Card>
 

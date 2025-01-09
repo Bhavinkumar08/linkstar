@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { LinkCard } from "@/components/LinkCard";
@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Moon, Sun, Search, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/hooks/use-theme";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,22 +36,107 @@ export default function Index() {
   const [sortOption, setSortOption] = useState<SortOption>("newest");
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
+  const { user } = useAuth();
 
-  const handleAddLink = (newLink: Omit<Link, "id" | "isStarred">) => {
-    const link: Link = {
-      ...newLink,
-      id: crypto.randomUUID(),
-      isStarred: false,
-    };
-    setLinks((prev) => [link, ...prev]);
+  const fetchLinks = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("links")
+      .select("id, name, url, description, tags, is_public, is_starred, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to fetch links",
+        variant: "destructive",
+      });
+    } else if (data) {
+      const transformed = data.map((d) => ({
+        id: d.id,
+        name: d.name,
+        url: d.url,
+        description: d.description,
+        tags: d.tags,
+        isPublic: d.is_public,
+        isStarred: d.is_starred,
+        createdAt: d.created_at,
+      }));
+      setLinks(transformed);
+    }
+  }, [user, toast]);
+
+  useEffect(() => {
+    if (user) {
+      fetchLinks();
+    }
+  }, [user, fetchLinks]);
+
+  const handleAddLink = async ({
+    name,
+    url,
+    description,
+    tags,
+    isPublic,
+  }: {
+    name: string;
+    url: string;
+    description: string;
+    tags: string[];
+    isPublic: boolean;
+  }) => {
+    const { data, error } = await supabase
+      .from("links")
+      .insert([{ name, url, description, tags, is_public: isPublic, user_id: user.id, is_starred: false }])
+      .select()
+      .single();
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add link",
+        variant: "destructive",
+      });
+    } else if (data) {
+      setLinks((prev) => [
+        {
+          id: data.id,
+          name: data.name,
+          url: data.url,
+          description: data.description,
+          tags: data.tags,
+          isPublic: data.is_public,
+          isStarred: data.is_starred,
+          createdAt: data.created_at,
+        },
+        ...prev,
+      ]);
+      toast({
+        title: "Success",
+        description: "Link added successfully",
+      });
+    }
   };
 
-  const handleDeleteLink = (id: string) => {
-    setLinks((prev) => prev.filter((link) => link.id !== id));
-    toast({
-      title: "Link deleted",
-      description: "The link has been removed from your collection.",
-    });
+  const handleDeleteLink = async (id: string) => {
+    const { error } = await supabase
+      .from('links')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete link",
+        variant: "destructive",
+      });
+    } else {
+      setLinks((prev) => prev.filter((link) => link.id !== id));
+      toast({
+        title: "Success",
+        description: "Link deleted successfully",
+      });
+    }
   };
 
   const handleEditLink = (id: string) => {
@@ -59,20 +146,48 @@ export default function Index() {
     });
   };
 
-  const handleToggleStar = (id: string) => {
-    setLinks((prev) =>
-      prev.map((link) =>
-        link.id === id ? { ...link, isStarred: !link.isStarred } : link
-      )
-    );
+  const handleToggleStar = async (id: string) => {
+    const link = links.find((l) => l.id === id);
+    const { error } = await supabase
+      .from('links')
+      .update({ is_starred: !link?.isStarred })
+      .eq('id', id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update link",
+        variant: "destructive",
+      });
+    } else {
+      setLinks((prev) =>
+        prev.map((link) =>
+          link.id === id ? { ...link, isStarred: !link.isStarred } : link
+        )
+      );
+    }
   };
 
-  const handleToggleVisibility = (id: string) => {
-    setLinks((prev) =>
-      prev.map((link) =>
-        link.id === id ? { ...link, isPublic: !link.isPublic } : link
-      )
-    );
+  const handleToggleVisibility = async (id: string) => {
+    const link = links.find((l) => l.id === id);
+    const { error } = await supabase
+      .from('links')
+      .update({ is_public: !link?.isPublic })
+      .eq('id', id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update link",
+        variant: "destructive",
+      });
+    } else {
+      setLinks((prev) =>
+        prev.map((link) =>
+          link.id === id ? { ...link, isPublic: !link.isPublic } : link
+        )
+      );
+    }
   };
 
   const sortLinks = (links: Link[]) => {
@@ -166,7 +281,14 @@ export default function Index() {
               {filteredLinks.map((link) => (
                 <LinkCard
                   key={link.id}
-                  {...link}
+                  id={link.id}
+                  name={link.name}
+                  url={link.url}
+                  description={link.description}
+                  tags={link.tags}
+                  isPublic={link.isPublic}
+                  isStarred={link.isStarred}
+                  createdAt={link.createdAt}
                   onDelete={handleDeleteLink}
                   onEdit={handleEditLink}
                   onToggleStar={handleToggleStar}

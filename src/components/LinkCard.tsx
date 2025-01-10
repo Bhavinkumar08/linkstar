@@ -12,10 +12,19 @@ interface LinkCardProps {
   tags: string[];
   isPublic: boolean;
   isStarred: boolean;
+  createdAt: Date;
+  isOwner?: boolean;
   onDelete: (id: string) => void;
-  onEdit: (id: string) => void;
+  onEdit: (id: string, updates: {
+    name: string;
+    url: string;
+    description: string;
+    tags: string[];
+    isPublic: boolean;
+  }) => void;
   onToggleStar: (id: string) => void;
   onToggleVisibility: (id: string) => void;
+  EditDialog?: React.ComponentType<{ link: { id: string; name: string; url: string; description: string; tags: string[]; isPublic: boolean; }; onEdit: (id: string, updates: { name: string; url: string; description: string; tags: string[]; isPublic: boolean; }) => void; }>;
 }
 
 export function LinkCard({
@@ -26,10 +35,12 @@ export function LinkCard({
   tags,
   isPublic,
   isStarred,
+  isOwner = true,
   onDelete,
   onEdit,
   onToggleStar,
   onToggleVisibility,
+  EditDialog,
 }: LinkCardProps) {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -52,17 +63,19 @@ export function LinkCard({
               {url}
             </a>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "transition-opacity",
-              isHovered ? "opacity-100" : "opacity-0"
-            )}
-            onClick={() => onToggleVisibility(id)}
-          >
-            {isPublic ? <Globe className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-          </Button>
+          {isOwner && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "transition-opacity",
+                isHovered ? "opacity-100" : "opacity-0"
+              )}
+              onClick={() => onToggleVisibility(id)}
+            >
+              {isPublic ? <Globe className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="p-4 pt-0">
@@ -80,38 +93,51 @@ export function LinkCard({
       </CardContent>
       <CardFooter className="p-4 pt-0">
         <div className="flex justify-between w-full">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onToggleStar(id)}
-            className={cn(
-              "text-muted-foreground",
-              isStarred && "text-yellow-400 hover:text-yellow-500"
-            )}
-          >
-            <Star className="h-4 w-4" fill={isStarred ? "currentColor" : "none"} />
-          </Button>
+          {isOwner && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onToggleStar(id)}
+              className={cn(
+                "text-muted-foreground",
+                isStarred && "text-yellow-400 hover:text-yellow-500"
+              )}
+            >
+              <Star className="h-4 w-4" fill={isStarred ? "currentColor" : "none"} />
+            </Button>
+          )}
           <div
             className={cn(
               "flex gap-2 transition-opacity",
-              isHovered ? "opacity-100" : "opacity-0"
+              isHovered ? "opacity-100" : "opacity-0",
+              !isOwner && "ml-auto"
             )}
           >
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onEdit(id)}
-            >
-              <Edit className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onDelete(id)}
-              className="text-destructive hover:text-destructive"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {isOwner && (
+              <>
+                {EditDialog && (
+                  <EditDialog
+                    link={{
+                      id,
+                      name,
+                      url,
+                      description,
+                      tags,
+                      isPublic,
+                    }}
+                    onEdit={onEdit}
+                  />
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onDelete(id)}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </CardFooter>

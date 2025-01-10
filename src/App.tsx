@@ -7,13 +7,25 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Settings from "./pages/Settings";
+import Starred from "./pages/Starred";
+import Tags from "./pages/Tags";
+import Public from "./pages/Public";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 const queryClient = new QueryClient();
 
 // Protected Route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user } = useAuth();
-  if (!user) return <Navigate to="/login" />;
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+  
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+  
   return <>{children}</>;
 };
 
@@ -31,6 +43,30 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Index />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/starred"
+              element={
+                <ProtectedRoute>
+                  <Starred />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/tags"
+              element={
+                <ProtectedRoute>
+                  <Tags />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/public"
+              element={
+                <ProtectedRoute>
+                  <Public />
                 </ProtectedRoute>
               }
             />

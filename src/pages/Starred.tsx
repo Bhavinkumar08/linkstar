@@ -5,6 +5,8 @@ import { LinkCard } from "@/components/LinkCard";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useNavigate } from "react-router-dom";
 
 interface Link {
   id: string;
@@ -20,7 +22,14 @@ interface Link {
 export default function Starred() {
   const [links, setLinks] = useState<Link[]>([]);
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/login');
+    }
+  }, [user, loading, navigate]);
 
   useEffect(() => {
     if (user) {
@@ -107,6 +116,10 @@ export default function Starred() {
       );
     }
   };
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
 
   return (
     <SidebarProvider>
